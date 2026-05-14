@@ -99,12 +99,14 @@ def test_app_is_starlette_with_bearer_middleware(server_module: ModuleType) -> N
 def test_phase1_tools_registered_and_phase2_tools_absent(
     server_module: ModuleType,
 ) -> None:
-    """AC §2 — the Garmin tools registered by :mod:`src.garmin.tools` are wired.
+    """AC §2 — the Garmin (and now Strava) tools registered on ``mcp`` are wired.
 
     T12 originally pinned only the two Phase 1 tools as present and the four
-    Phase 2 modification tools as absent. T14 brings the modification subset
-    online by adding the four tools to ``register(mcp)``, so they now appear
-    here too — only the Strava read tools (T17+) remain forbidden.
+    Phase 2 modification tools as absent. T14 brought the modification subset
+    online; T17 brings the three Strava read tools online. Per the T14
+    reviewer convention noted in STATUS.md (subset-equality, not exact-set
+    equality), this test now asserts the required subset is present rather
+    than maintaining a fragile forbidden set.
     """
     # ``FastMCP._tool_manager._tools`` is the canonical registry; we reach in
     # rather than spin up an async event loop just to call ``list_tools()``.
@@ -117,15 +119,10 @@ def test_phase1_tools_registered_and_phase2_tools_absent(
         "replace_scheduled_workout",
         "unschedule_workout",
         "delete_workout",
-    }.issubset(tool_names)
-
-    forbidden = {
         "list_recent_activities",
         "get_activity_details",
         "get_weekly_summary",
-    }
-    leaked = forbidden & tool_names
-    assert not leaked, f"Strava tools leaked into Garmin server: {leaked!r}"
+    }.issubset(tool_names)
 
 
 def test_post_without_bearer_returns_401(server_module: ModuleType) -> None:
