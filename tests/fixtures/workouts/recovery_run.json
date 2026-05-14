@@ -1,0 +1,46 @@
+{
+  "workoutName": "Recovery run 30min",
+  "sportType": {
+    "sportTypeId": 1,
+    "sportTypeKey": "running",
+    "displayOrder": 1
+  },
+  "estimatedDurationInSecs": 1800,
+  "workoutSegments": [
+    {
+      "segmentOrder": 1,
+      "sportType": {
+        "sportTypeId": 1,
+        "sportTypeKey": "running",
+        "displayOrder": 1
+      },
+      "workoutSteps": [
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 1,
+          "stepType": {
+            "stepTypeId": 4,
+            "stepTypeKey": "recovery",
+            "displayOrder": 4
+          },
+          "endCondition": {
+            "conditionTypeId": 2,
+            "conditionTypeKey": "time",
+            "displayOrder": 2,
+            "displayable": true
+          },
+          "endConditionValue": 1800.0,
+          "targetType": {
+            "workoutTargetTypeId": 4,
+            "workoutTargetTypeKey": "heart.rate.zone",
+            "displayOrder": 4,
+            "targetValueOne": 120,
+            "targetValueTwo": 140
+          }
+        }
+      ]
+    }
+  ],
+  "author": {},
+  "description": "[mcp][road_run]"
+}
