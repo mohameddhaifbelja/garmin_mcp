@@ -236,9 +236,9 @@ def test_auth_error_keeps_client_uncached_for_retry(
 # --- Method dispatch ---------------------------------------------------------
 
 
-def _make_dispatch_cases() -> (
-    list[tuple[str, Callable[[GarminClient], Any], str, tuple[Any, ...], dict[str, Any]]]
-):
+def _make_dispatch_cases() -> list[
+    tuple[str, Callable[[GarminClient], Any], str, tuple[Any, ...], dict[str, Any]]
+]:
     """Build the dispatch parametrisation table.
 
     Each row: ``(method_name, invoke_fn, expected_call_name, expected_args, expected_kwargs)``.
