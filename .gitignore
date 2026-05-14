@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+.eggs/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Secrets and tokens
+.env
+.env.local
+tokens/
+*.token
+~/.garminconnect/
+
+# Local logs
+logs/
+*.log
+
+# Planning artifacts (kept local, not pushed)
+TICKETS.md
+STATUS.md
+harness/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo
