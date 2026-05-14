@@ -1,0 +1,129 @@
+{
+  "workoutName": "Uphill threshold",
+  "sportType": {
+    "sportTypeId": 1,
+    "sportTypeKey": "running",
+    "displayOrder": 1
+  },
+  "estimatedDurationInSecs": 4200,
+  "workoutSegments": [
+    {
+      "segmentOrder": 1,
+      "sportType": {
+        "sportTypeId": 1,
+        "sportTypeKey": "running",
+        "displayOrder": 1
+      },
+      "workoutSteps": [
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 1,
+          "stepType": {
+            "stepTypeId": 1,
+            "stepTypeKey": "warmup",
+            "displayOrder": 1
+          },
+          "endCondition": {
+            "conditionTypeId": 2,
+            "conditionTypeKey": "time",
+            "displayOrder": 2,
+            "displayable": true
+          },
+          "endConditionValue": 900.0,
+          "targetType": {
+            "workoutTargetTypeId": 1,
+            "workoutTargetTypeKey": "no.target",
+            "displayOrder": 1
+          }
+        },
+        {
+          "type": "RepeatGroupDTO",
+          "stepOrder": 2,
+          "stepType": {
+            "stepTypeId": 6,
+            "stepTypeKey": "repeat",
+            "displayOrder": 6
+          },
+          "numberOfIterations": 5,
+          "workoutSteps": [
+            {
+              "type": "ExecutableStepDTO",
+              "stepOrder": 1,
+              "stepType": {
+                "stepTypeId": 3,
+                "stepTypeKey": "interval",
+                "displayOrder": 3
+              },
+              "endCondition": {
+                "conditionTypeId": 2,
+                "conditionTypeKey": "time",
+                "displayOrder": 2,
+                "displayable": true
+              },
+              "endConditionValue": 240.0,
+              "targetType": {
+                "workoutTargetTypeId": 4,
+                "workoutTargetTypeKey": "heart.rate.zone",
+                "displayOrder": 4,
+                "targetValueOne": 170,
+                "targetValueTwo": 178
+              }
+            },
+            {
+              "type": "ExecutableStepDTO",
+              "stepOrder": 2,
+              "stepType": {
+                "stepTypeId": 4,
+                "stepTypeKey": "recovery",
+                "displayOrder": 4
+              },
+              "endCondition": {
+                "conditionTypeId": 2,
+                "conditionTypeKey": "time",
+                "displayOrder": 2,
+                "displayable": true
+              },
+              "endConditionValue": 240.0,
+              "targetType": {
+                "workoutTargetTypeId": 1,
+                "workoutTargetTypeKey": "no.target",
+                "displayOrder": 1
+              }
+            }
+          ],
+          "endCondition": {
+            "conditionTypeId": 7,
+            "conditionTypeKey": "iterations",
+            "displayOrder": 7,
+            "displayable": false
+          },
+          "endConditionValue": 5.0,
+          "smartRepeat": false
+        },
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 3,
+          "stepType": {
+            "stepTypeId": 2,
+            "stepTypeKey": "cooldown",
+            "displayOrder": 2
+          },
+          "endCondition": {
+            "conditionTypeId": 2,
+            "conditionTypeKey": "time",
+            "displayOrder": 2,
+            "displayable": true
+          },
+          "endConditionValue": 900.0,
+          "targetType": {
+            "workoutTargetTypeId": 1,
+            "workoutTargetTypeKey": "no.target",
+            "displayOrder": 1
+          }
+        }
+      ]
+    }
+  ],
+  "author": {},
+  "description": "[mcp][treadmill_run]"
+}

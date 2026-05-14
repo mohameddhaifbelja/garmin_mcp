@@ -1,0 +1,128 @@
+{
+  "workoutName": "Nested repeat",
+  "sportType": {
+    "sportTypeId": 1,
+    "sportTypeKey": "running",
+    "displayOrder": 1
+  },
+  "estimatedDurationInSecs": 2160,
+  "workoutSegments": [
+    {
+      "segmentOrder": 1,
+      "sportType": {
+        "sportTypeId": 1,
+        "sportTypeKey": "running",
+        "displayOrder": 1
+      },
+      "workoutSteps": [
+        {
+          "type": "RepeatGroupDTO",
+          "stepOrder": 1,
+          "stepType": {
+            "stepTypeId": 6,
+            "stepTypeKey": "repeat",
+            "displayOrder": 6
+          },
+          "numberOfIterations": 3,
+          "workoutSteps": [
+            {
+              "type": "RepeatGroupDTO",
+              "stepOrder": 1,
+              "stepType": {
+                "stepTypeId": 6,
+                "stepTypeKey": "repeat",
+                "displayOrder": 6
+              },
+              "numberOfIterations": 5,
+              "workoutSteps": [
+                {
+                  "type": "ExecutableStepDTO",
+                  "stepOrder": 1,
+                  "stepType": {
+                    "stepTypeId": 3,
+                    "stepTypeKey": "interval",
+                    "displayOrder": 3
+                  },
+                  "endCondition": {
+                    "conditionTypeId": 2,
+                    "conditionTypeKey": "time",
+                    "displayOrder": 2,
+                    "displayable": true
+                  },
+                  "endConditionValue": 60.0,
+                  "targetType": {
+                    "workoutTargetTypeId": 4,
+                    "workoutTargetTypeKey": "heart.rate.zone",
+                    "displayOrder": 4,
+                    "targetValueOne": 170,
+                    "targetValueTwo": 180
+                  }
+                },
+                {
+                  "type": "ExecutableStepDTO",
+                  "stepOrder": 2,
+                  "stepType": {
+                    "stepTypeId": 4,
+                    "stepTypeKey": "recovery",
+                    "displayOrder": 4
+                  },
+                  "endCondition": {
+                    "conditionTypeId": 2,
+                    "conditionTypeKey": "time",
+                    "displayOrder": 2,
+                    "displayable": true
+                  },
+                  "endConditionValue": 60.0,
+                  "targetType": {
+                    "workoutTargetTypeId": 1,
+                    "workoutTargetTypeKey": "no.target",
+                    "displayOrder": 1
+                  }
+                }
+              ],
+              "endCondition": {
+                "conditionTypeId": 7,
+                "conditionTypeKey": "iterations",
+                "displayOrder": 7,
+                "displayable": false
+              },
+              "endConditionValue": 5.0,
+              "smartRepeat": false
+            },
+            {
+              "type": "ExecutableStepDTO",
+              "stepOrder": 2,
+              "stepType": {
+                "stepTypeId": 4,
+                "stepTypeKey": "recovery",
+                "displayOrder": 4
+              },
+              "endCondition": {
+                "conditionTypeId": 2,
+                "conditionTypeKey": "time",
+                "displayOrder": 2,
+                "displayable": true
+              },
+              "endConditionValue": 120.0,
+              "targetType": {
+                "workoutTargetTypeId": 1,
+                "workoutTargetTypeKey": "no.target",
+                "displayOrder": 1
+              }
+            }
+          ],
+          "endCondition": {
+            "conditionTypeId": 7,
+            "conditionTypeKey": "iterations",
+            "displayOrder": 7,
+            "displayable": false
+          },
+          "endConditionValue": 3.0,
+          "smartRepeat": false
+        }
+      ]
+    }
+  ],
+  "author": {},
+  "description": "[mcp][road_run]"
+}

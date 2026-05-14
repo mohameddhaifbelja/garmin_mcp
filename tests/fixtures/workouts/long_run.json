@@ -1,0 +1,46 @@
+{
+  "workoutName": "Long run 2h",
+  "sportType": {
+    "sportTypeId": 1,
+    "sportTypeKey": "running",
+    "displayOrder": 1
+  },
+  "estimatedDurationInSecs": 7200,
+  "workoutSegments": [
+    {
+      "segmentOrder": 1,
+      "sportType": {
+        "sportTypeId": 1,
+        "sportTypeKey": "running",
+        "displayOrder": 1
+      },
+      "workoutSteps": [
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 1,
+          "stepType": {
+            "stepTypeId": 3,
+            "stepTypeKey": "interval",
+            "displayOrder": 3
+          },
+          "endCondition": {
+            "conditionTypeId": 2,
+            "conditionTypeKey": "time",
+            "displayOrder": 2,
+            "displayable": true
+          },
+          "endConditionValue": 7200.0,
+          "targetType": {
+            "workoutTargetTypeId": 4,
+            "workoutTargetTypeKey": "heart.rate.zone",
+            "displayOrder": 4,
+            "targetValueOne": 140,
+            "targetValueTwo": 155
+          }
+        }
+      ]
+    }
+  ],
+  "author": {},
+  "description": "[mcp][road_run]"
+}

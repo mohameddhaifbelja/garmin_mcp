@@ -1,0 +1,89 @@
+{
+  "workoutName": "Strides on easy",
+  "sportType": {
+    "sportTypeId": 1,
+    "sportTypeKey": "running",
+    "displayOrder": 1
+  },
+  "estimatedDurationInSecs": 1880,
+  "workoutSegments": [
+    {
+      "segmentOrder": 1,
+      "sportType": {
+        "sportTypeId": 1,
+        "sportTypeKey": "running",
+        "displayOrder": 1
+      },
+      "workoutSteps": [
+        {
+          "type": "ExecutableStepDTO",
+          "stepOrder": 1,
+          "stepType": {
+            "stepTypeId": 3,
+            "stepTypeKey": "interval",
+            "displayOrder": 3
+          },
+          "endCondition": {
+            "conditionTypeId": 2,
+            "conditionTypeKey": "time",
+            "displayOrder": 2,
+            "displayable": true
+          },
+          "endConditionValue": 1800.0,
+          "targetType": {
+            "workoutTargetTypeId": 4,
+            "workoutTargetTypeKey": "heart.rate.zone",
+            "displayOrder": 4,
+            "targetValueOne": 141,
+            "targetValueTwo": 155
+          }
+        },
+        {
+          "type": "RepeatGroupDTO",
+          "stepOrder": 2,
+          "stepType": {
+            "stepTypeId": 6,
+            "stepTypeKey": "repeat",
+            "displayOrder": 6
+          },
+          "numberOfIterations": 4,
+          "workoutSteps": [
+            {
+              "type": "ExecutableStepDTO",
+              "stepOrder": 1,
+              "stepType": {
+                "stepTypeId": 3,
+                "stepTypeKey": "interval",
+                "displayOrder": 3
+              },
+              "endCondition": {
+                "conditionTypeId": 2,
+                "conditionTypeKey": "time",
+                "displayOrder": 2,
+                "displayable": true
+              },
+              "endConditionValue": 20.0,
+              "targetType": {
+                "workoutTargetTypeId": 5,
+                "workoutTargetTypeKey": "pace.zone",
+                "displayOrder": 5,
+                "targetValueOne": 3.8461538461538463,
+                "targetValueTwo": 4.166666666666667
+              }
+            }
+          ],
+          "endCondition": {
+            "conditionTypeId": 7,
+            "conditionTypeKey": "iterations",
+            "displayOrder": 7,
+            "displayable": false
+          },
+          "endConditionValue": 4.0,
+          "smartRepeat": false
+        }
+      ]
+    }
+  ],
+  "author": {},
+  "description": "[mcp][road_run] Strides on grass"
+}
