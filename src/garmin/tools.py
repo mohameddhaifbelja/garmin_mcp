@@ -35,6 +35,7 @@ Design notes
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import Iterator
 from datetime import date, datetime
 from typing import Any, TypedDict
@@ -45,6 +46,7 @@ from mcp.server.fastmcp import FastMCP
 from src import audit
 from src.garmin.client import GarminClient
 from src.garmin.translate_forward import to_garmin
+from src.garmin.translate_reverse import garmin_to_canonical
 from src.models import Workout
 
 # Re-exported so unit tests can monkeypatch ``tools.audit_record`` instead of
@@ -330,6 +332,202 @@ def _coerce_optional_str(value: Any) -> str | None:
     return str(value)
 
 
+# --- Phase 2 (T14): modification subset ------------------------------------
+
+
+class ReplaceScheduledWorkoutResult(TypedDict):
+    """Return shape for :func:`replace_scheduled_workout`."""
+
+    new_workout_id: int
+    new_scheduled_id: int
+    original_workout_id: int
+    date: str
+
+
+class UnscheduleWorkoutResult(TypedDict):
+    """Return shape for :func:`unschedule_workout`."""
+
+    scheduled_id: int
+    success: bool
+
+
+class DeleteWorkoutResult(TypedDict):
+    """Return shape for :func:`delete_workout`."""
+
+    workout_id: int
+    success: bool
+
+
+def _extract_workout_id_from_scheduled(payload: dict[str, Any]) -> int:
+    """Pull the underlying ``workoutId`` from a scheduled-entry payload.
+
+    A get-scheduled-workout-by-id response always carries the id of the
+    library template at the top level (``workoutId``). Raises if absent so a
+    silent ``None`` does not propagate into the delete call.
+    """
+    value = payload.get("workoutId")
+    if value is None:
+        raise ValueError(
+            f"get_scheduled_workout_by_id response missing workoutId; "
+            f"got {sorted(payload.keys())!r}"
+        )
+    return int(value)
+
+
+def _extract_scheduled_date(payload: dict[str, Any]) -> str:
+    """Pull the original calendar date from a scheduled-entry payload.
+
+    Accepts ``calendarDate`` or ``date``, mirroring the envelope-key
+    tolerance T11 uses for the list view. Raises if neither is present —
+    we need this value to re-schedule the new workout on the same date.
+    """
+    for key in _ITEM_DATE_KEYS:
+        value = payload.get(key)
+        if value is not None:
+            return str(value)
+    raise ValueError(
+        f"get_scheduled_workout_by_id response missing a date field; "
+        f"tried {_ITEM_DATE_KEYS} in {sorted(payload.keys())!r}"
+    )
+
+
+def get_scheduled_workout(scheduled_id: int) -> dict[str, Any]:
+    """Fetch a scheduled workout and return it as a canonical workout dict.
+
+    Args:
+        scheduled_id: The scheduled-entry id returned by
+            :func:`list_scheduled_workouts` or :func:`create_and_schedule`.
+
+    Returns:
+        The canonical :class:`src.models.Workout` serialised via
+        ``model_dump(exclude_none=True, mode="json")``. External workouts
+        that include shapes the canonical schema does not model (power
+        targets, etc.) come back with ``Step.opaque`` populated so the
+        original Garmin step survives a subsequent replace.
+
+    Raises:
+        ValueError: If the underlying Garmin payload cannot be translated
+            (e.g. malformed segment structure). Bubbles up from the reverse
+            translator.
+    """
+    client = _get_client()
+    payload = client.get_scheduled_workout_by_id(scheduled_id)
+    workout = garmin_to_canonical(payload)
+    return workout.model_dump(exclude_none=True, mode="json")
+
+
+def replace_scheduled_workout(
+    scheduled_id: int, new_workout: Workout
+) -> ReplaceScheduledWorkoutResult:
+    """Replace a scheduled workout with a new one on the same date.
+
+    Args:
+        scheduled_id: The scheduled-entry id of the workout to replace.
+        new_workout: The canonical :class:`src.models.Workout` that should
+            take its place.
+
+    Returns:
+        A dict with keys ``new_workout_id``, ``new_scheduled_id``,
+        ``original_workout_id``, and ``date``.
+
+    Raises:
+        ValueError: If the fetched payload is missing the workout id or
+            calendar date, or if the schedule response is missing its id.
+        Exception: If any underlying Garmin call fails. Best-effort
+            rollback is attempted only at the final schedule step (the new
+            workout is deleted to avoid orphaning a library template);
+            earlier failures may leave the calendar / library in a partial
+            state — see the module docstring for the exact contract.
+    """
+    client = _get_client()
+
+    # Step 1: fetch the original so we know what to delete and where to put
+    # the replacement.
+    original_payload = client.get_scheduled_workout_by_id(scheduled_id)
+    original_workout_id = _extract_workout_id_from_scheduled(original_payload)
+    original_date = _extract_scheduled_date(original_payload)
+
+    # Step 2: remove the calendar entry.
+    client.unschedule_workout(scheduled_id)
+
+    # Step 3: delete the library template. No rollback past this point for
+    # earlier failures (the calendar entry is already gone and we have no
+    # safe way to recreate it from the dict here).
+    client.delete_workout(original_workout_id)
+
+    # Step 4: upload the replacement template.
+    garmin_workout = to_garmin(new_workout)
+    upload_response = client.upload_running_workout(garmin_workout)
+    new_workout_id = _extract_workout_id(upload_response)
+
+    # Step 5: schedule the new template on the same date. If this fails,
+    # delete the freshly-uploaded template so the library is not left with
+    # an orphan, then re-raise.
+    try:
+        schedule_response = client.schedule_workout(new_workout_id, original_date)
+    except Exception:
+        # Best-effort cleanup — swallow any secondary failure here so the
+        # original exception is the one the caller sees.
+        with contextlib.suppress(Exception):
+            client.delete_workout(new_workout_id)
+        raise
+    new_scheduled_id = _extract_scheduled_id(schedule_response)
+
+    result: ReplaceScheduledWorkoutResult = {
+        "new_workout_id": new_workout_id,
+        "new_scheduled_id": new_scheduled_id,
+        "original_workout_id": original_workout_id,
+        "date": original_date,
+    }
+    audit_record(
+        "replace_scheduled_workout",
+        {"scheduled_id": scheduled_id, "new_workout_name": new_workout.name},
+        dict(result),
+    )
+    return result
+
+
+def unschedule_workout(scheduled_id: int) -> UnscheduleWorkoutResult:
+    """Remove a workout from the Garmin calendar; library template untouched.
+
+    Args:
+        scheduled_id: The scheduled-entry id to remove.
+
+    Returns:
+        ``{"scheduled_id": scheduled_id, "success": True}`` on success.
+
+    Raises:
+        Exception: Whatever the underlying ``garminconnect`` call raises on
+            failure (HTTP error, auth error). The audit log only records
+            successful calls.
+    """
+    client = _get_client()
+    client.unschedule_workout(scheduled_id)
+    result: UnscheduleWorkoutResult = {"scheduled_id": scheduled_id, "success": True}
+    audit_record("unschedule_workout", {"scheduled_id": scheduled_id}, dict(result))
+    return result
+
+
+def delete_workout(workout_id: int) -> DeleteWorkoutResult:
+    """Delete a workout template from the Garmin library.
+
+    Args:
+        workout_id: The library workout id to delete.
+
+    Returns:
+        ``{"workout_id": workout_id, "success": True}`` on success.
+
+    Raises:
+        Exception: Whatever the underlying ``garminconnect`` call raises on
+            failure. The audit log only records successful calls.
+    """
+    client = _get_client()
+    client.delete_workout(workout_id)
+    result: DeleteWorkoutResult = {"workout_id": workout_id, "success": True}
+    audit_record("delete_workout", {"workout_id": workout_id}, dict(result))
+    return result
+
+
 def register(mcp: FastMCP) -> None:
     """Register the Phase 1 Garmin tools on the supplied FastMCP app.
 
@@ -339,3 +537,7 @@ def register(mcp: FastMCP) -> None:
     """
     mcp.tool()(create_and_schedule)
     mcp.tool()(list_scheduled_workouts)
+    mcp.tool()(get_scheduled_workout)
+    mcp.tool()(replace_scheduled_workout)
+    mcp.tool()(unschedule_workout)
+    mcp.tool()(delete_workout)
