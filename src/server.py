@@ -30,6 +30,7 @@ from mcp.server.fastmcp import FastMCP
 
 from src.auth import BearerAuthMiddleware
 from src.garmin import tools as garmin_tools
+from src.strava import tools as strava_tools
 
 INSTRUCTIONS = """\
 You schedule running workouts on the user's Garmin Connect calendar.
@@ -73,6 +74,7 @@ CADENCE:
 
 mcp = FastMCP(name="garmin_mcp", instructions=INSTRUCTIONS)
 garmin_tools.register(mcp)
+strava_tools.register(mcp)
 
 app = mcp.streamable_http_app()
 app.add_middleware(BearerAuthMiddleware)
