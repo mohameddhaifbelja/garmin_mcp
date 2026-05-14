@@ -479,13 +479,18 @@ def test_list_scheduled_workouts_does_not_call_audit_log(
 
 
 def test_register_adds_both_tools_to_fastmcp() -> None:
-    """``register(mcp)`` must wire both tools so they appear in ``list_tools``."""
+    """``register(mcp)`` must wire both T11 tools so they appear in ``list_tools``.
+
+    Asserted as a subset rather than equality so later tickets (T14) can add
+    more tools to the same ``register`` call without breaking this test —
+    T14's own register test pins the full exact list.
+    """
     mcp = FastMCP(name="test-garmin")
     register(mcp)
 
     tool_list = asyncio.run(mcp.list_tools())
-    names = sorted(tool.name for tool in tool_list)
-    assert names == ["create_and_schedule", "list_scheduled_workouts"]
+    names = {tool.name for tool in tool_list}
+    assert {"create_and_schedule", "list_scheduled_workouts"}.issubset(names)
 
 
 def test_register_tool_docstrings_describe_args_and_return() -> None:
