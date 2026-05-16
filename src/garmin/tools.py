@@ -260,8 +260,11 @@ def list_scheduled_workouts(start_iso: str, end_iso: str) -> list[ScheduledWorko
 
     Returns:
         A list of summary dicts: ``{scheduled_id, workout_id, date, name,
-        total_duration_sec, source}``. ``source`` is ``"mcp"`` if the
-        workout description starts with ``[mcp]``, else ``"external"``.
+        total_duration_sec, source}``. ``source`` is ``"mcp"`` when the
+        underlying workout's description starts with ``[mcp]``, else
+        ``"external"``. Each item triggers one ``get_workout_by_id`` call
+        because Garmin's calendar payload does not echo the description on
+        list items — kept tolerable by the single-user, week-scale usage.
 
     Raises:
         ValueError: If either date is malformed or ``end_iso`` precedes
@@ -278,7 +281,7 @@ def list_scheduled_workouts(start_iso: str, end_iso: str) -> list[ScheduledWorko
     for year, month in _iter_year_months(start, end):
         payload = client.get_scheduled_workouts(year, month)
         for item in _iter_calendar_items(payload):
-            summary = _project_summary(item)
+            summary = _project_summary(item, _fetch_template_description(client, item))
             item_date = summary["date"]
             if item_date is None:
                 # Without a date we can't filter; skip rather than guess.
@@ -288,30 +291,40 @@ def list_scheduled_workouts(start_iso: str, end_iso: str) -> list[ScheduledWorko
     return summaries
 
 
-_NAME_MARKER = "[mcp] "
+def _fetch_template_description(client: GarminClient, item: dict[str, Any]) -> str | None:
+    """Best-effort fetch of the workout template description for one list item.
+
+    Returns ``None`` when the calendar item carries no ``workoutId`` or the
+    fetch raises — callers treat both as "unknown source". The fetch is
+    deliberately tolerant of failure because ``list_scheduled_workouts`` must
+    keep returning the rest of the items even if one template lookup blows up.
+    """
+    raw_id = _first_present(item, _WORKOUT_ID_KEYS)
+    workout_id = _coerce_optional_int(raw_id)
+    if workout_id is None:
+        return None
+    try:
+        template = client.get_workout_by_id(workout_id)
+    except Exception:  # noqa: BLE001 — see docstring
+        return None
+    description = template.get("description") if isinstance(template, dict) else None
+    return description if isinstance(description, str) else None
 
 
-def _project_summary(item: dict[str, Any]) -> ScheduledWorkoutSummary:
+def _project_summary(item: dict[str, Any], description: str | None) -> ScheduledWorkoutSummary:
     """Project a raw Garmin calendar item into the public summary shape.
 
-    Source classification looks at the ``title`` because Garmin's calendar
-    payload does not echo the workout description on list items — the
-    description ``[mcp][<sport>]`` marker is invisible here, so the forward
-    translator also prefixes the workout name with ``[mcp] `` (see
-    ``translate_forward._format_name``). The marker is stripped from the
-    returned ``name`` so consumers see the canonical, user-facing label.
+    ``description`` is the workout-template description fetched separately
+    (see ``_fetch_template_description``). Source is ``"mcp"`` when it
+    carries the ``[mcp]`` prefix the forward translator emits, else
+    ``"external"``.
     """
-    raw_name = _first_present(item, _ITEM_NAME_KEYS)
-    is_mcp = isinstance(raw_name, str) and raw_name.startswith(_NAME_MARKER)
-    if is_mcp:
-        clean_name: Any = raw_name[len(_NAME_MARKER) :]
-    else:
-        clean_name = raw_name
+    is_mcp = isinstance(description, str) and description.startswith("[mcp]")
     return {
         "scheduled_id": _coerce_optional_int(_first_present(item, _SCHEDULE_ID_KEYS)),
         "workout_id": _coerce_optional_int(_first_present(item, _WORKOUT_ID_KEYS)),
         "date": _coerce_optional_str(_first_present(item, _ITEM_DATE_KEYS)),
-        "name": _coerce_optional_str(clean_name),
+        "name": _coerce_optional_str(_first_present(item, _ITEM_NAME_KEYS)),
         "total_duration_sec": _coerce_optional_float(_first_present(item, _ITEM_DURATION_KEYS)),
         "source": "mcp" if is_mcp else "external",
     }

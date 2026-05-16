@@ -366,29 +366,11 @@ def to_garmin(w: Workout) -> RunningWorkout:
     )
 
     return RunningWorkout(
-        workoutName=_format_name(w.name),
+        workoutName=w.name,
         estimatedDurationInSecs=_estimated_total_seconds(list(w.steps)),
         workoutSegments=[segment],
         description=_format_description(w.sport, w.description),
     )
-
-
-# Marker prefix on the workout name so ``list_scheduled_workouts`` can classify
-# source from the calendar payload's ``title`` field alone. Garmin's calendar
-# list response does not include the workout description, so the description
-# marker (``[mcp][<sport>]``) is invisible to the list endpoint — see
-# ``list_scheduled_workouts`` and ``DESIGN.md`` §7.
-_NAME_MARKER = "[mcp] "
-
-
-def _format_name(name: str) -> str:
-    """Prepend the ``[mcp] `` marker to the workout name if not already present.
-
-    Idempotent: if the caller already passes a prefixed name (e.g. via
-    ``replace_scheduled_workout`` after a round-trip through the reverse
-    translator that retained the prefix), no second prefix is added.
-    """
-    return name if name.startswith(_NAME_MARKER) else f"{_NAME_MARKER}{name}"
 
 
 # Step kind set is exported as a sanity check for downstream tickets that may

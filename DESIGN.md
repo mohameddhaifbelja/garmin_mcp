@@ -184,9 +184,7 @@ def sec_per_km_to_mps(sec_per_km: float) -> float:
     return 1000.0 / sec_per_km
 ```
 
-**MCP marker convention.** Garmin's calendar-list payload does not echo the workout description, only `{id, title, date, sportTypeKey, workoutId}`. To keep `list_scheduled_workouts` source classification fast and dependency-free, every workout created via this server has TWO markers:
-1. `workoutName` prefixed with `[mcp] ` — visible to the calendar list endpoint via `title`. Stripped by both `_project_summary` and `garmin_to_canonical` on the way out, so consumers see the canonical user-facing name.
-2. `description` prefixed with `[mcp][<sport>]` — carries the sport sub-type for the reverse translator (`road_run` / `trail_run` / `treadmill_run`).
+**MCP marker convention.** Garmin's calendar-list payload does not echo the workout description, only `{id, title, date, sportTypeKey, workoutId}`. To keep workout titles clean (no `[mcp]` prefix on the calendar / watch UI) while still surfacing source in `list_scheduled_workouts`, the marker lives **only on the description** (`description = "[mcp][<sport>] <user description>"`). The list endpoint then does **one extra `get_workout_by_id` per item** to read the template description and classify source. Cost is tolerable at single-user, week-scale usage; if multi-user / month-scale becomes a use case, batch or cache this lookup.
 
 ---
 

@@ -90,9 +90,11 @@ The workout's own fields (`workoutId`, `workoutName`, etc.) are **nested under `
 }
 ```
 
-No `description`, no `workoutDescription`, no field that carries through any prose marker from the underlying workout template. Source-classification (mcp vs external) cannot rely on the description here; we prefix `workoutName` with `[mcp] ` so the marker rides on `title`. The forward translator does this idempotently in `_format_name`; the reverse path strips it.
+No `description`, no `workoutDescription`, no field that carries through any prose marker from the underlying workout template. Source classification therefore can't be done from the list payload alone.
 
-Trade-off accepted: the `[mcp] ` prefix is visible in the Garmin Connect UI and on the watch. The alternative was N+1 fetches per list item to read the template description.
+**Current approach: N+1 description fetch.** `list_scheduled_workouts` issues one `get_workout_by_id(workout_id)` per item, reads the template `description`, and classifies as `source="mcp"` when the description starts with `[mcp]`. The fetch is wrapped in `try / except` so a single failed lookup doesn't drop the rest of the list. The `[mcp][<sport>]` description marker stays on every workout this server creates.
+
+**Why N+1 and not a `[mcp] ` title prefix:** an earlier iteration prefixed `workoutName` with `[mcp] ` to keep classification cheap. The user vetoed this — the title is what the watch and Garmin Connect UI show, and the marker polluted that surface. The N+1 cost (~200ms per item, ~1 s for a typical training week) is fine for single-user, week-scale usage. If multi-user / month-scale ever happens, batch or cache the lookup; do not put markers back on the title.
 
 ## 5. Distance-based steps don't carry an estimated duration
 

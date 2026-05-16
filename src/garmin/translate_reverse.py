@@ -96,11 +96,6 @@ _STEP_KIND_BY_KEY: dict[str, StepKind] = {
 # round-trips exact.
 _OPEN_HR_MAX_SENTINEL = 220
 
-# Mirror of the forward translator's name marker (``translate_forward.py``).
-# Lets the reverse path strip the source prefix that ``list_scheduled_workouts``
-# uses for ``source='mcp'`` classification.
-_NAME_MARKER = "[mcp] "
-
 # Sports we recognise from the ``[mcp][<sport>]`` description prefix.
 _KNOWN_SPORTS: set[Sport] = {"road_run", "trail_run", "treadmill_run"}
 
@@ -354,11 +349,7 @@ def garmin_to_canonical(payload: dict[str, Any]) -> Workout:
     External workouts that lack the ``[mcp]`` marker default to
     ``sport="road_run"`` and preserve the original description as-is.
     """
-    raw_name = str(payload.get("workoutName") or "Untitled")
-    # Strip the ``[mcp] `` source marker added by the forward translator so the
-    # canonical name round-trips cleanly. External workouts without the marker
-    # pass through unchanged.
-    name = raw_name[len(_NAME_MARKER) :] if raw_name.startswith(_NAME_MARKER) else raw_name
+    name = str(payload.get("workoutName") or "Untitled")
 
     description_raw = payload.get("description") or ""
     if not isinstance(description_raw, str):
