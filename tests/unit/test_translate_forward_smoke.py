@@ -118,10 +118,10 @@ def test_hr_range_target_with_both_bounds_passes_through_unchanged() -> None:
             ),
         ],
     )
-    target = _only_segment(to_garmin(w))["workoutSteps"][0]["targetType"]
-    assert target["workoutTargetTypeKey"] == "heart.rate.zone"
-    assert target["targetValueOne"] == 160
-    assert target["targetValueTwo"] == 175
+    step = _only_segment(to_garmin(w))["workoutSteps"][0]
+    assert step["targetType"]["workoutTargetTypeKey"] == "heart.rate.zone"
+    assert step["targetValueOne"] == 160
+    assert step["targetValueTwo"] == 175
 
 
 def test_hr_range_target_open_ended_substitutes_220_sentinel() -> None:
@@ -136,9 +136,9 @@ def test_hr_range_target_open_ended_substitutes_220_sentinel() -> None:
             ),
         ],
     )
-    target = _only_segment(to_garmin(w))["workoutSteps"][0]["targetType"]
-    assert target["targetValueOne"] == 175
-    assert target["targetValueTwo"] == _OPEN_HR_MAX_SENTINEL == 220
+    step = _only_segment(to_garmin(w))["workoutSteps"][0]
+    assert step["targetValueOne"] == 175
+    assert step["targetValueTwo"] == _OPEN_HR_MAX_SENTINEL == 220
 
 
 def test_pace_target_emits_mps_in_min_max_garmin_ordering() -> None:
@@ -157,11 +157,11 @@ def test_pace_target_emits_mps_in_min_max_garmin_ordering() -> None:
             ),
         ],
     )
-    target = _only_segment(to_garmin(w))["workoutSteps"][0]["targetType"]
-    assert target["workoutTargetTypeKey"] == "pace.zone"
-    assert target["targetValueOne"] == sec_per_km_to_mps(330.0)
-    assert target["targetValueTwo"] == sec_per_km_to_mps(300.0)
-    assert target["targetValueOne"] < target["targetValueTwo"]
+    step = _only_segment(to_garmin(w))["workoutSteps"][0]
+    assert step["targetType"]["workoutTargetTypeKey"] == "pace.zone"
+    assert step["targetValueOne"] == sec_per_km_to_mps(330.0)
+    assert step["targetValueTwo"] == sec_per_km_to_mps(300.0)
+    assert step["targetValueOne"] < step["targetValueTwo"]
 
 
 def test_rest_step_kind_maps_through_recovery_helper_lossy() -> None:

@@ -146,7 +146,6 @@ _WORKOUT_ID_KEYS = ("workoutId",)
 _ITEM_DATE_KEYS = ("date", "calendarDate")
 _ITEM_NAME_KEYS = ("name", "title", "workoutName")
 _ITEM_DURATION_KEYS = ("total_duration_sec", "estimatedDurationInSecs")
-_ITEM_DESCRIPTION_KEYS = ("description", "workoutDescription")
 
 
 def _iter_calendar_items(payload: Any) -> list[dict[str, Any]]:
@@ -261,8 +260,11 @@ def list_scheduled_workouts(start_iso: str, end_iso: str) -> list[ScheduledWorko
 
     Returns:
         A list of summary dicts: ``{scheduled_id, workout_id, date, name,
-        total_duration_sec, source}``. ``source`` is ``"mcp"`` if the
-        workout description starts with ``[mcp]``, else ``"external"``.
+        total_duration_sec, source}``. ``source`` is ``"mcp"`` when the
+        underlying workout's description starts with ``[mcp]``, else
+        ``"external"``. Each item triggers one ``get_workout_by_id`` call
+        because Garmin's calendar payload does not echo the description on
+        list items — kept tolerable by the single-user, week-scale usage.
 
     Raises:
         ValueError: If either date is malformed or ``end_iso`` precedes
@@ -279,7 +281,7 @@ def list_scheduled_workouts(start_iso: str, end_iso: str) -> list[ScheduledWorko
     for year, month in _iter_year_months(start, end):
         payload = client.get_scheduled_workouts(year, month)
         for item in _iter_calendar_items(payload):
-            summary = _project_summary(item)
+            summary = _project_summary(item, _fetch_template_description(client, item))
             item_date = summary["date"]
             if item_date is None:
                 # Without a date we can't filter; skip rather than guess.
@@ -289,19 +291,42 @@ def list_scheduled_workouts(start_iso: str, end_iso: str) -> list[ScheduledWorko
     return summaries
 
 
-def _project_summary(item: dict[str, Any]) -> ScheduledWorkoutSummary:
-    """Project a raw Garmin calendar item into the public summary shape."""
-    description = _first_present(item, _ITEM_DESCRIPTION_KEYS)
-    source = (
-        "mcp" if isinstance(description, str) and description.startswith("[mcp]") else "external"
-    )
+def _fetch_template_description(client: GarminClient, item: dict[str, Any]) -> str | None:
+    """Best-effort fetch of the workout template description for one list item.
+
+    Returns ``None`` when the calendar item carries no ``workoutId`` or the
+    fetch raises — callers treat both as "unknown source". The fetch is
+    deliberately tolerant of failure because ``list_scheduled_workouts`` must
+    keep returning the rest of the items even if one template lookup blows up.
+    """
+    raw_id = _first_present(item, _WORKOUT_ID_KEYS)
+    workout_id = _coerce_optional_int(raw_id)
+    if workout_id is None:
+        return None
+    try:
+        template = client.get_workout_by_id(workout_id)
+    except Exception:  # noqa: BLE001 — see docstring
+        return None
+    description = template.get("description") if isinstance(template, dict) else None
+    return description if isinstance(description, str) else None
+
+
+def _project_summary(item: dict[str, Any], description: str | None) -> ScheduledWorkoutSummary:
+    """Project a raw Garmin calendar item into the public summary shape.
+
+    ``description`` is the workout-template description fetched separately
+    (see ``_fetch_template_description``). Source is ``"mcp"`` when it
+    carries the ``[mcp]`` prefix the forward translator emits, else
+    ``"external"``.
+    """
+    is_mcp = isinstance(description, str) and description.startswith("[mcp]")
     return {
         "scheduled_id": _coerce_optional_int(_first_present(item, _SCHEDULE_ID_KEYS)),
         "workout_id": _coerce_optional_int(_first_present(item, _WORKOUT_ID_KEYS)),
         "date": _coerce_optional_str(_first_present(item, _ITEM_DATE_KEYS)),
         "name": _coerce_optional_str(_first_present(item, _ITEM_NAME_KEYS)),
         "total_duration_sec": _coerce_optional_float(_first_present(item, _ITEM_DURATION_KEYS)),
-        "source": source,
+        "source": "mcp" if is_mcp else "external",
     }
 
 
@@ -361,11 +386,17 @@ class DeleteWorkoutResult(TypedDict):
 def _extract_workout_id_from_scheduled(payload: dict[str, Any]) -> int:
     """Pull the underlying ``workoutId`` from a scheduled-entry payload.
 
-    A get-scheduled-workout-by-id response always carries the id of the
-    library template at the top level (``workoutId``). Raises if absent so a
-    silent ``None`` does not propagate into the delete call.
+    Real Garmin responses nest the library workout dict under ``workout`` on
+    the calendar-entry envelope. Some test stubs (and prior helper
+    behavior) carried ``workoutId`` at the top level. Accept either shape
+    and raise only if neither path yields an id, so a silent ``None`` does
+    not propagate into the delete call.
     """
     value = payload.get("workoutId")
+    if value is None:
+        nested = payload.get("workout") or {}
+        if isinstance(nested, dict):
+            value = nested.get("workoutId")
     if value is None:
         raise ValueError(
             f"get_scheduled_workout_by_id response missing workoutId; "
@@ -412,7 +443,13 @@ def get_scheduled_workout(scheduled_id: int) -> dict[str, Any]:
     """
     client = _get_client()
     payload = client.get_scheduled_workout_by_id(scheduled_id)
-    workout = garmin_to_canonical(payload)
+    # Real Garmin wraps the workout body inside a calendar-entry envelope at
+    # ``payload["workout"]``; older test stubs and some envelope variants put
+    # the workout fields at the top level. Unwrap when nested so the reverse
+    # translator sees a plain workout dict either way.
+    inner = payload.get("workout") if isinstance(payload, dict) else None
+    workout_payload = inner if isinstance(inner, dict) else payload
+    workout = garmin_to_canonical(workout_payload)
     return workout.model_dump(exclude_none=True, mode="json")
 
 

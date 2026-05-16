@@ -64,10 +64,10 @@
               "targetType": {
                 "workoutTargetTypeId": 4,
                 "workoutTargetTypeKey": "heart.rate.zone",
-                "displayOrder": 4,
-                "targetValueOne": 175,
-                "targetValueTwo": 220
-              }
+                "displayOrder": 4
+              },
+              "targetValueOne": 175,
+              "targetValueTwo": 220
             },
             {
               "type": "ExecutableStepDTO",

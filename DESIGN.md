@@ -169,10 +169,14 @@ class Workout(BaseModel):
 
 **Hand-written dict construction** is required for:
 - `DistanceDuration` → `{conditionTypeId: 1, conditionTypeKey: "distance", endConditionValue: meters}`
-- `HRRangeTarget` → `{workoutTargetTypeId: 4, workoutTargetTypeKey: "heart.rate.zone", targetValueOne: min_bpm, targetValueTwo: max_bpm or 220}`
-- `PaceTarget` → `{workoutTargetTypeId: 5, workoutTargetTypeKey: "pace.zone", targetValueOne: 1000/max_sec_per_km, targetValueTwo: 1000/min_sec_per_km}` (m/s, faster value → higher m/s)
+- `HRRangeTarget` → `targetType={workoutTargetTypeId: 4, workoutTargetTypeKey: "heart.rate.zone"}` + step top-level `targetValueOne: min_bpm`, `targetValueTwo: max_bpm or 220`
+- `PaceTarget` → `targetType={workoutTargetTypeId: 6, workoutTargetTypeKey: "pace.zone"}` + step top-level `targetValueOne: 1000/max_sec_per_km`, `targetValueTwo: 1000/min_sec_per_km` (m/s, faster value → higher m/s)
 - `"rest"` step kind → reuse `create_recovery_step` (no rest-step helper; lossy mapping documented)
 - Sport sub-types → emit appropriate Garmin sport workout class (`RunningWorkout` for all three, distinguished via `description` marker and the running profile activity tag)
+
+**Target value placement.** `targetValueOne` / `targetValueTwo` are **siblings of `targetType` on the executable step**, NOT nested inside the `targetType` dict. Garmin silently drops values nested under `targetType` and the watch shows the step with no usable target. The forward translator builds the `targetType` block via the `garminconnect` helpers and then attaches the two value fields via `model_copy(update=…)` so they ride on the step as top-level extras (`ExecutableStep.model_config` allows extras).
+
+**Pace vs speed target type.** Use `workoutTargetTypeId = 6` (`pace.zone`, rendered as min/km on the watch). The `garminconnect` library only exposes `TargetType.SPEED = 5` (`speed.zone`, rendered as km/h); use the literal `6` for pace. Both type ids accept identical `targetValueOne`/`Two` values in m/s — the id picks the watch's display unit.
 
 Pace conversion at Garmin boundary only:
 ```python
@@ -180,7 +184,7 @@ def sec_per_km_to_mps(sec_per_km: float) -> float:
     return 1000.0 / sec_per_km
 ```
 
-**MCP marker convention.** Every Workout created via this server gets `description` prefixed with `[mcp]` so `list_scheduled_workouts` can tag `source` correctly.
+**MCP marker convention.** Garmin's calendar-list payload does not echo the workout description, only `{id, title, date, sportTypeKey, workoutId}`. To keep workout titles clean (no `[mcp]` prefix on the calendar / watch UI) while still surfacing source in `list_scheduled_workouts`, the marker lives **only on the description** (`description = "[mcp][<sport>] <user description>"`). The list endpoint then does **one extra `get_workout_by_id` per item** to read the template description and classify source. Cost is tolerable at single-user, week-scale usage; if multi-user / month-scale becomes a use case, batch or cache this lookup.
 
 ---
 
@@ -191,7 +195,7 @@ Best-effort policy. Parse what's known, preserve what isn't.
 ### Supported shapes
 - Step types: `WARMUP (1)`, `COOLDOWN (2)`, `INTERVAL (3)`, `RECOVERY (4)`, `REST (5)` → maps to `StepKind`.
 - End conditions: `TIME (2)` → `TimeDuration`, `DISTANCE (1)` → `DistanceDuration`.
-- Targets: `HEART_RATE (4)` → `HRRangeTarget`, `SPEED (5)` (pace) → `PaceTarget`, `NO_TARGET (1)` → `OpenTarget`.
+- Targets: `HEART_RATE (4)` → `HRRangeTarget`, `PACE (6)` → `PaceTarget`, `NO_TARGET (1)` → `OpenTarget`. `targetValueOne` / `targetValueTwo` are read from the step top level (not nested under `targetType`). Externally-created `speed.zone (5)` steps fall through to the opaque-blob fallback — they round-trip verbatim but are not modeled as `PaceTarget`.
 - `RepeatGroup` with nested `ExecutableStep | RepeatGroup`.
 
 ### Unsupported shapes → opaque blob fallback

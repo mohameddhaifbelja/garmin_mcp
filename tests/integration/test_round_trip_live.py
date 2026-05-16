@@ -54,7 +54,8 @@ from datetime import date, timedelta
 import pytest
 
 from src.garmin import tools as gt
-from src.models import HRRangeTarget, Step, TimeDuration, Workout
+from src.garmin.translate_forward import sec_per_km_to_mps
+from src.models import HRRangeTarget, PaceTarget, Step, TimeDuration, Workout
 
 pytestmark = pytest.mark.integration
 
@@ -69,13 +70,20 @@ def date_60_days_out() -> str:
     return (date.today() + timedelta(days=60)).isoformat()
 
 
+_HR_MIN_BPM = 141
+_HR_MAX_BPM = 155
+_PACE_FAST_SEC_PER_KM = 315.0  # 5:15/km
+_PACE_SLOW_SEC_PER_KM = 325.0  # 5:25/km
+
+
 @pytest.fixture(scope="module")
 def smoke_workout() -> Workout:
-    """A minimal canonical workout: 5min warmup / 10min HR-zone / 5min cooldown.
+    """A canonical workout exercising both HR and pace targets.
 
-    Mirrors the shape of ``scripts/tracer.py``'s tracer-bullet workout so the
-    integration test and the standalone tracer exercise the same Garmin step
-    types (warmup, active w/ HR target, cooldown).
+    Including pace in the smoke workout is deliberate: the original integration
+    fixture used only HR, which let a wire-format bug live undetected — values
+    were being nested under ``targetType`` while Garmin reads them as step
+    top-level fields. The deep raw-payload assertions below pin both shapes.
     """
     return Workout(
         name="MCP integration smoke",
@@ -86,7 +94,15 @@ def smoke_workout() -> Workout:
             Step(
                 kind="active",
                 duration=TimeDuration(seconds=600),
-                target=HRRangeTarget(min_bpm=141, max_bpm=155),
+                target=HRRangeTarget(min_bpm=_HR_MIN_BPM, max_bpm=_HR_MAX_BPM),
+            ),
+            Step(
+                kind="active",
+                duration=TimeDuration(seconds=300),
+                target=PaceTarget(
+                    min_sec_per_km=_PACE_FAST_SEC_PER_KM,
+                    max_sec_per_km=_PACE_SLOW_SEC_PER_KM,
+                ),
             ),
             Step(kind="cooldown", duration=TimeDuration(seconds=300)),
         ],
@@ -127,6 +143,59 @@ def test_full_smoke_loop(date_60_days_out: str, smoke_workout: Workout) -> None:
         assert canonical.get("sport") == smoke_workout.sport
         assert isinstance(canonical.get("steps"), list)
         assert len(canonical["steps"]) == len(smoke_workout.steps)
+
+        # 3b. Target round-trip values --------------------------------------
+        # The canonical reverse-translated step must surface the same target
+        # bounds we sent. Pre-T15+: the reverse translator silently fell back
+        # to ``OpenTarget`` when values weren't found, so step count matched
+        # but every target turned into "open". Pin actual values here so
+        # that regression cannot pass quietly again.
+        hr_step = canonical["steps"][1]
+        assert hr_step["target"]["kind"] == "hr_range", hr_step
+        assert hr_step["target"]["min_bpm"] == _HR_MIN_BPM
+        assert hr_step["target"]["max_bpm"] == _HR_MAX_BPM
+        pace_step = canonical["steps"][2]
+        assert pace_step["target"]["kind"] == "pace", pace_step
+        assert pace_step["target"]["min_sec_per_km"] == pytest.approx(
+            _PACE_FAST_SEC_PER_KM, rel=1e-4
+        )
+        assert pace_step["target"]["max_sec_per_km"] == pytest.approx(
+            _PACE_SLOW_SEC_PER_KM, rel=1e-4
+        )
+
+        # 3c. Raw-payload wire format ---------------------------------------
+        # Pin the exact Garmin wire shape: ``targetValueOne`` / ``targetValueTwo``
+        # are siblings of ``targetType`` on the executable step (NOT nested
+        # inside it), and pace uses target-type id 6 (``pace.zone``, min/km
+        # display) not 5 (``speed.zone``, km/h). Both were live bugs once.
+        raw = gt._get_client().get_scheduled_workout_by_id(scheduled_id)
+        raw_steps = [
+            step
+            for seg in raw.get("workout", raw).get("workoutSegments", [])
+            for step in seg.get("workoutSteps", [])
+            if step.get("type") == "ExecutableStepDTO"
+        ]
+        assert len(raw_steps) == len(smoke_workout.steps)
+        raw_hr = raw_steps[1]
+        assert raw_hr["targetType"]["workoutTargetTypeKey"] == "heart.rate.zone"
+        assert raw_hr.get("targetValueOne") == pytest.approx(_HR_MIN_BPM, rel=1e-6), (
+            "HR targetValueOne missing from step top-level — likely nested under "
+            "targetType, which Garmin silently drops."
+        )
+        assert raw_hr.get("targetValueTwo") == pytest.approx(_HR_MAX_BPM, rel=1e-6)
+        raw_pace = raw_steps[2]
+        assert raw_pace["targetType"]["workoutTargetTypeKey"] == "pace.zone", (
+            "Pace target stored as something other than pace.zone — was the "
+            "target-type id swapped from 6 back to SPEED (5)? Watch would "
+            "render this in km/h instead of min/km."
+        )
+        assert raw_pace["targetType"]["workoutTargetTypeId"] == 6
+        assert raw_pace.get("targetValueOne") == pytest.approx(
+            sec_per_km_to_mps(_PACE_SLOW_SEC_PER_KM), rel=1e-4
+        )
+        assert raw_pace.get("targetValueTwo") == pytest.approx(
+            sec_per_km_to_mps(_PACE_FAST_SEC_PER_KM), rel=1e-4
+        )
 
         # 4. replace_scheduled_workout --------------------------------------
         replacement = smoke_workout.model_copy(update={"name": "MCP integration smoke (replaced)"})

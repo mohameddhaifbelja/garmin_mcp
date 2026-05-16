@@ -49,15 +49,25 @@ def _make_executable_step(
     end_condition_value: float = 300.0,
     target_type: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Build a minimal Garmin ``ExecutableStepDTO`` dict for tests."""
+    """Build a minimal Garmin ``ExecutableStepDTO`` dict for tests.
+
+    Garmin stores ``targetValueOne`` / ``targetValueTwo`` as siblings of
+    ``targetType`` on the step. To keep call sites concise, this helper
+    accepts ``target_type`` as a full dict that may include the value keys;
+    the helper lifts them to step top level so the resulting shape matches
+    what real Garmin returns.
+    """
     if target_type is None:
         target_type = {
             "workoutTargetTypeId": 1,
             "workoutTargetTypeKey": "no.target",
             "displayOrder": 1,
         }
+    target_type = dict(target_type)  # copy before mutation
+    value_one = target_type.pop("targetValueOne", None)
+    value_two = target_type.pop("targetValueTwo", None)
     end_condition_id = 2 if end_condition_key == "time" else 1
-    return {
+    step: dict[str, Any] = {
         "type": "ExecutableStepDTO",
         "stepOrder": step_order,
         "stepType": {
@@ -74,6 +84,11 @@ def _make_executable_step(
         "endConditionValue": end_condition_value,
         "targetType": target_type,
     }
+    if value_one is not None:
+        step["targetValueOne"] = value_one
+    if value_two is not None:
+        step["targetValueTwo"] = value_two
+    return step
 
 
 def _wrap_in_workout(

@@ -62,12 +62,12 @@
               },
               "endConditionValue": 480.0,
               "targetType": {
-                "workoutTargetTypeId": 5,
+                "workoutTargetTypeId": 6,
                 "workoutTargetTypeKey": "pace.zone",
-                "displayOrder": 5,
-                "targetValueOne": 2.857142857142857,
-                "targetValueTwo": 3.0303030303030303
-              }
+                "displayOrder": 6
+              },
+              "targetValueOne": 2.857142857142857,
+              "targetValueTwo": 3.0303030303030303
             },
             {
               "type": "ExecutableStepDTO",

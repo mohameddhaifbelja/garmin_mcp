@@ -68,6 +68,12 @@ class _StubClient:
         self.upload_response: dict[str, Any] = {"workoutId": 4451}
         self.schedule_response: dict[str, Any] = {"workoutScheduleId": 99231}
         self.get_scheduled_responses: dict[tuple[int, int], Any] = {}
+        # Per-workout-id template responses for the N+1 source-classification
+        # fetch in ``list_scheduled_workouts``. Tests that care about source
+        # tagging register the relevant ``workoutId -> {description: ...}``
+        # entries; lookups for unregistered ids return an empty dict so the
+        # classifier defaults to ``"external"``.
+        self.workout_by_id_responses: dict[int, dict[str, Any]] = {}
 
     def upload_running_workout(self, running_workout: Any) -> dict[str, Any]:
         self.calls.append(("upload_running_workout", (running_workout,), {}))
@@ -82,6 +88,10 @@ class _StubClient:
         # Return an empty bare list when nothing was registered for this month;
         # tests that care register the exact payload they want.
         return self.get_scheduled_responses.get((year, month), [])
+
+    def get_workout_by_id(self, workout_id: int) -> dict[str, Any]:
+        self.calls.append(("get_workout_by_id", (workout_id,), {}))
+        return self.workout_by_id_responses.get(int(workout_id), {})
 
 
 @pytest.fixture
@@ -278,10 +288,12 @@ def test_list_scheduled_workouts_envelope_calendar_items(
                 "calendarDate": "2026-05-14",
                 "title": "Easy run",
                 "estimatedDurationInSecs": 1800,
-                "description": "[mcp][road_run] Easy 30 min",
             },
         ],
     }
+    # Source classification fetches the workout template by id to read its
+    # description (the calendar list payload doesn't echo description).
+    stub_client.workout_by_id_responses[100] = {"description": "[mcp][road_run] Easy 30 min"}
 
     out = list_scheduled_workouts("2026-05-14", "2026-05-20")
     assert len(out) == 1
@@ -362,22 +374,31 @@ def test_list_scheduled_workouts_source_tagging_both_branches(
     stub_client: _StubClient,
     fixed_tz: None,
 ) -> None:
-    """One [mcp]-prefixed and one bare item — both source flags must be set."""
+    """One [mcp]-prefixed and one bare item — both source flags must be set.
+
+    Source classification fetches each workout template by id and reads its
+    description, because Garmin's calendar list payload does not echo
+    description (see ``list_scheduled_workouts`` for the rationale).
+    """
     stub_client.get_scheduled_responses[(2026, 5)] = {
         "calendarItems": [
             {
                 "workoutScheduleId": 10,
                 "workoutId": 1000,
                 "calendarDate": "2026-05-14",
-                "description": "[mcp][road_run] Easy run",
+                "title": "Easy run",
             },
             {
                 "workoutScheduleId": 11,
                 "workoutId": 1100,
                 "calendarDate": "2026-05-15",
-                "description": "Race week tune-up — added on the phone",
+                "title": "Race week tune-up — added on the phone",
             },
         ],
+    }
+    stub_client.workout_by_id_responses[1000] = {"description": "[mcp][road_run] Easy run"}
+    stub_client.workout_by_id_responses[1100] = {
+        "description": "Race week tune-up — added on the phone"
     }
 
     out = list_scheduled_workouts("2026-05-14", "2026-05-20")

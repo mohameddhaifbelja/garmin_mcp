@@ -195,9 +195,11 @@ def _parse_duration(step_dict: dict[str, Any]) -> CanonicalDuration | None:
 def _parse_target(step_dict: dict[str, Any]) -> CanonicalTarget | None:
     """Parse a canonical target from a Garmin step dict.
 
-    Returns ``None`` if the target type is one we don't model (power.zone,
-    cadence, custom) — the caller treats that as a signal to trigger the
-    opaque fallback.
+    Garmin stores ``targetValueOne`` / ``targetValueTwo`` as top-level fields
+    on the step (siblings of ``targetType``), not nested inside the target
+    metadata block. We read them from there. Returns ``None`` if the target
+    type is one we don't model (power.zone, cadence, custom) — the caller
+    treats that as a signal to trigger the opaque fallback.
     """
     target_type = step_dict.get("targetType") or {}
     target_key = target_type.get("workoutTargetTypeKey")
@@ -206,8 +208,8 @@ def _parse_target(step_dict: dict[str, Any]) -> CanonicalTarget | None:
         return OpenTarget()
 
     if target_key == "heart.rate.zone":
-        v_one = target_type.get("targetValueOne")
-        v_two = target_type.get("targetValueTwo")
+        v_one = step_dict.get("targetValueOne")
+        v_two = step_dict.get("targetValueTwo")
         if not isinstance(v_one, (int, float)):
             return None
         min_bpm = int(v_one)
@@ -219,8 +221,8 @@ def _parse_target(step_dict: dict[str, Any]) -> CanonicalTarget | None:
         return HRRangeTarget(min_bpm=min_bpm, max_bpm=max_bpm)
 
     if target_key == "pace.zone":
-        v_one = target_type.get("targetValueOne")
-        v_two = target_type.get("targetValueTwo")
+        v_one = step_dict.get("targetValueOne")
+        v_two = step_dict.get("targetValueTwo")
         if not isinstance(v_one, (int, float)) or not isinstance(v_two, (int, float)):
             return None
         if v_one <= 0 or v_two <= 0:
