@@ -107,7 +107,12 @@ _RUNNING_SPORT_TYPE: dict[str, Any] = {
 # Display orders the library uses on the (default) ``no.target`` block.
 _NO_TARGET_DISPLAY_ORDER = 1
 _HR_TARGET_DISPLAY_ORDER = 4
-_PACE_TARGET_DISPLAY_ORDER = 5
+_PACE_TARGET_DISPLAY_ORDER = 6
+
+# Garmin's pace-zone target type id. The ``garminconnect`` library exposes
+# ``TargetType.SPEED = 5`` (km/h display) but no ``PACE`` constant; id 6 is
+# the pace-zone variant that renders as min/km on the watch and in Connect.
+_PACE_ZONE_TARGET_TYPE_ID = 6
 
 # StepKind -> the library helper that builds the right ``ExecutableStep``.
 # ``"rest"`` reuses ``create_recovery_step`` — see module docstring for why.
@@ -138,44 +143,59 @@ def _open_target() -> dict[str, Any]:
     }
 
 
-def _hr_zone_target(target: HRRangeTarget) -> dict[str, Any]:
-    """Garmin ``heart.rate.zone`` target block from a canonical HR range.
+def _hr_zone_target(target: HRRangeTarget) -> tuple[dict[str, Any], tuple[int, int]]:
+    """Garmin ``heart.rate.zone`` target metadata + (valueOne, valueTwo).
 
-    Substitutes :data:`_OPEN_HR_MAX_SENTINEL` when ``max_bpm`` is ``None``;
-    Garmin's API rejects half-open ranges.
+    Garmin stores the bpm bounds as top-level fields on the ``ExecutableStep``
+    (siblings of ``targetType``), not inside the target-type dict. The caller
+    is responsible for attaching the returned tuple as ``targetValueOne`` /
+    ``targetValueTwo`` on the step. Substitutes :data:`_OPEN_HR_MAX_SENTINEL`
+    when ``max_bpm`` is ``None``; Garmin's API rejects half-open ranges.
     """
     max_bpm = target.max_bpm if target.max_bpm is not None else _OPEN_HR_MAX_SENTINEL
-    return {
+    type_block = {
         "workoutTargetTypeId": TargetType.HEART_RATE,
         "workoutTargetTypeKey": "heart.rate.zone",
         "displayOrder": _HR_TARGET_DISPLAY_ORDER,
-        "targetValueOne": target.min_bpm,
-        "targetValueTwo": max_bpm,
     }
+    return type_block, (target.min_bpm, max_bpm)
 
 
-def _pace_zone_target(target: PaceTarget) -> dict[str, Any]:
-    """Garmin ``pace.zone`` target block from a canonical pace band.
+def _pace_zone_target(
+    target: PaceTarget,
+) -> tuple[dict[str, Any], tuple[float, float]]:
+    """Garmin ``pace.zone`` target metadata + (valueOne, valueTwo) in m/s.
 
     Per DESIGN.md §7: ``targetValueOne`` corresponds to ``max_sec_per_km``
     (the slow end → smaller m/s), ``targetValueTwo`` to ``min_sec_per_km``
-    (the fast end → larger m/s). So in the emitted dict
-    ``targetValueOne < targetValueTwo``, matching Garmin's min/max ordering.
+    (the fast end → larger m/s). So ``valueOne < valueTwo``, matching
+    Garmin's min/max ordering. Values are attached as step top-level fields
+    by the caller (Garmin reads them there, not from inside ``targetType``).
     """
-    return {
-        "workoutTargetTypeId": TargetType.SPEED,
+    type_block = {
+        "workoutTargetTypeId": _PACE_ZONE_TARGET_TYPE_ID,
         "workoutTargetTypeKey": "pace.zone",
         "displayOrder": _PACE_TARGET_DISPLAY_ORDER,
-        "targetValueOne": sec_per_km_to_mps(target.max_sec_per_km),
-        "targetValueTwo": sec_per_km_to_mps(target.min_sec_per_km),
     }
+    values = (
+        sec_per_km_to_mps(target.max_sec_per_km),
+        sec_per_km_to_mps(target.min_sec_per_km),
+    )
+    return type_block, values
 
 
-def _build_target_block(step: Step) -> dict[str, Any]:
-    """Dispatch ``Step.target`` to the right Garmin target dict builder."""
+def _build_target_block(
+    step: Step,
+) -> tuple[dict[str, Any], tuple[Any, Any] | None]:
+    """Dispatch ``Step.target`` to its Garmin (type-dict, values?) builder.
+
+    Returns the target-type metadata dict and an optional ``(valueOne,
+    valueTwo)`` tuple. ``None`` for open targets, where no values are
+    written. The caller attaches the values as step top-level fields.
+    """
     target = step.target
     if isinstance(target, OpenTarget):
-        return _open_target()
+        return _open_target(), None
     if isinstance(target, HRRangeTarget):
         return _hr_zone_target(target)
     if isinstance(target, PaceTarget):
@@ -204,21 +224,21 @@ def _apply_distance_end_condition(executable: ExecutableStep, meters: float) -> 
 def _build_executable_step(step: Step, step_order: int) -> ExecutableStep:
     """Translate one canonical ``Step`` into a Garmin ``ExecutableStep``.
 
-    Builds the step via the appropriate ``create_*_step`` helper to get the
-    correct ``stepType`` block, then layers on the target dict and (if
-    distance-based) swaps the end-condition fields.
+    Builds the step via the appropriate ``create_*_step`` helper, attaches
+    the target-type metadata, and lifts HR/pace values to the step's top
+    level (where Garmin reads them — siblings of ``targetType``). For
+    distance-based durations the end-condition block is swapped in place.
     """
     builder = _STEP_BUILDERS[step.kind]
-    target_block = _build_target_block(step)
+    target_block, target_values = _build_target_block(step)
 
     if isinstance(step.duration, TimeDuration):
-        return builder(
+        executable = builder(
             duration_seconds=float(step.duration.seconds),
             step_order=step_order,
             target_type=target_block,
         )
-
-    if isinstance(step.duration, DistanceDuration):
+    elif isinstance(step.duration, DistanceDuration):
         # ``duration_seconds`` is a required positional kwarg on every helper.
         # We pass a placeholder (the meter value) and overwrite the
         # end-condition block immediately so the placeholder never leaks.
@@ -228,10 +248,20 @@ def _build_executable_step(step: Step, step_order: int) -> ExecutableStep:
             target_type=target_block,
         )
         _apply_distance_end_condition(executable, step.duration.meters)
-        return executable
+    else:
+        # Unreachable: ``Duration`` is a closed discriminated union.
+        raise TypeError(f"Unsupported canonical duration: {type(step.duration).__name__}")
 
-    # Unreachable: ``Duration`` is a closed discriminated union.
-    raise TypeError(f"Unsupported canonical duration: {type(step.duration).__name__}")
+    if target_values is not None:
+        # Garmin expects ``targetValueOne`` / ``targetValueTwo`` as siblings
+        # of ``targetType`` on the step, not nested inside it. ``ExecutableStep``
+        # has ``model_config = ConfigDict(extra='allow')``, so ``model_copy``
+        # with ``update`` attaches them as serializable extras.
+        value_one, value_two = target_values
+        executable = executable.model_copy(
+            update={"targetValueOne": value_one, "targetValueTwo": value_two}
+        )
+    return executable
 
 
 def _build_workout_step(
@@ -336,11 +366,29 @@ def to_garmin(w: Workout) -> RunningWorkout:
     )
 
     return RunningWorkout(
-        workoutName=w.name,
+        workoutName=_format_name(w.name),
         estimatedDurationInSecs=_estimated_total_seconds(list(w.steps)),
         workoutSegments=[segment],
         description=_format_description(w.sport, w.description),
     )
+
+
+# Marker prefix on the workout name so ``list_scheduled_workouts`` can classify
+# source from the calendar payload's ``title`` field alone. Garmin's calendar
+# list response does not include the workout description, so the description
+# marker (``[mcp][<sport>]``) is invisible to the list endpoint — see
+# ``list_scheduled_workouts`` and ``DESIGN.md`` §7.
+_NAME_MARKER = "[mcp] "
+
+
+def _format_name(name: str) -> str:
+    """Prepend the ``[mcp] `` marker to the workout name if not already present.
+
+    Idempotent: if the caller already passes a prefixed name (e.g. via
+    ``replace_scheduled_workout`` after a round-trip through the reverse
+    translator that retained the prefix), no second prefix is added.
+    """
+    return name if name.startswith(_NAME_MARKER) else f"{_NAME_MARKER}{name}"
 
 
 # Step kind set is exported as a sanity check for downstream tickets that may

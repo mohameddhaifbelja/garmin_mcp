@@ -1,5 +1,5 @@
 {
-  "workoutName": "Flat tempo",
+  "workoutName": "[mcp] Flat tempo",
   "sportType": {
     "sportTypeId": 1,
     "sportTypeKey": "running",
@@ -52,12 +52,12 @@
           },
           "endConditionValue": 1200.0,
           "targetType": {
-            "workoutTargetTypeId": 5,
+            "workoutTargetTypeId": 6,
             "workoutTargetTypeKey": "pace.zone",
-            "displayOrder": 5,
-            "targetValueOne": 3.076923076923077,
-            "targetValueTwo": 3.1746031746031744
-          }
+            "displayOrder": 6
+          },
+          "targetValueOne": 3.076923076923077,
+          "targetValueTwo": 3.1746031746031744
         },
         {
           "type": "ExecutableStepDTO",

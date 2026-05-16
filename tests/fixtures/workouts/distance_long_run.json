@@ -1,5 +1,5 @@
 {
-  "workoutName": "Long run 22km",
+  "workoutName": "[mcp] Long run 22km",
   "sportType": {
     "sportTypeId": 1,
     "sportTypeKey": "running",
@@ -33,10 +33,10 @@
           "targetType": {
             "workoutTargetTypeId": 4,
             "workoutTargetTypeKey": "heart.rate.zone",
-            "displayOrder": 4,
-            "targetValueOne": 140,
-            "targetValueTwo": 155
-          }
+            "displayOrder": 4
+          },
+          "targetValueOne": 140,
+          "targetValueTwo": 155
         }
       ]
     }

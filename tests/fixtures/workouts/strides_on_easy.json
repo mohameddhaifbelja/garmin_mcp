@@ -1,5 +1,5 @@
 {
-  "workoutName": "Strides on easy",
+  "workoutName": "[mcp] Strides on easy",
   "sportType": {
     "sportTypeId": 1,
     "sportTypeKey": "running",
@@ -33,10 +33,10 @@
           "targetType": {
             "workoutTargetTypeId": 4,
             "workoutTargetTypeKey": "heart.rate.zone",
-            "displayOrder": 4,
-            "targetValueOne": 141,
-            "targetValueTwo": 155
-          }
+            "displayOrder": 4
+          },
+          "targetValueOne": 141,
+          "targetValueTwo": 155
         },
         {
           "type": "RepeatGroupDTO",
@@ -64,12 +64,12 @@
               },
               "endConditionValue": 20.0,
               "targetType": {
-                "workoutTargetTypeId": 5,
+                "workoutTargetTypeId": 6,
                 "workoutTargetTypeKey": "pace.zone",
-                "displayOrder": 5,
-                "targetValueOne": 3.8461538461538463,
-                "targetValueTwo": 4.166666666666667
-              }
+                "displayOrder": 6
+              },
+              "targetValueOne": 3.8461538461538463,
+              "targetValueTwo": 4.166666666666667
             }
           ],
           "endCondition": {

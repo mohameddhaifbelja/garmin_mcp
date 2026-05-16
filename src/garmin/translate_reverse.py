@@ -96,6 +96,11 @@ _STEP_KIND_BY_KEY: dict[str, StepKind] = {
 # round-trips exact.
 _OPEN_HR_MAX_SENTINEL = 220
 
+# Mirror of the forward translator's name marker (``translate_forward.py``).
+# Lets the reverse path strip the source prefix that ``list_scheduled_workouts``
+# uses for ``source='mcp'`` classification.
+_NAME_MARKER = "[mcp] "
+
 # Sports we recognise from the ``[mcp][<sport>]`` description prefix.
 _KNOWN_SPORTS: set[Sport] = {"road_run", "trail_run", "treadmill_run"}
 
@@ -195,9 +200,11 @@ def _parse_duration(step_dict: dict[str, Any]) -> CanonicalDuration | None:
 def _parse_target(step_dict: dict[str, Any]) -> CanonicalTarget | None:
     """Parse a canonical target from a Garmin step dict.
 
-    Returns ``None`` if the target type is one we don't model (power.zone,
-    cadence, custom) — the caller treats that as a signal to trigger the
-    opaque fallback.
+    Garmin stores ``targetValueOne`` / ``targetValueTwo`` as top-level fields
+    on the step (siblings of ``targetType``), not nested inside the target
+    metadata block. We read them from there. Returns ``None`` if the target
+    type is one we don't model (power.zone, cadence, custom) — the caller
+    treats that as a signal to trigger the opaque fallback.
     """
     target_type = step_dict.get("targetType") or {}
     target_key = target_type.get("workoutTargetTypeKey")
@@ -206,8 +213,8 @@ def _parse_target(step_dict: dict[str, Any]) -> CanonicalTarget | None:
         return OpenTarget()
 
     if target_key == "heart.rate.zone":
-        v_one = target_type.get("targetValueOne")
-        v_two = target_type.get("targetValueTwo")
+        v_one = step_dict.get("targetValueOne")
+        v_two = step_dict.get("targetValueTwo")
         if not isinstance(v_one, (int, float)):
             return None
         min_bpm = int(v_one)
@@ -219,8 +226,8 @@ def _parse_target(step_dict: dict[str, Any]) -> CanonicalTarget | None:
         return HRRangeTarget(min_bpm=min_bpm, max_bpm=max_bpm)
 
     if target_key == "pace.zone":
-        v_one = target_type.get("targetValueOne")
-        v_two = target_type.get("targetValueTwo")
+        v_one = step_dict.get("targetValueOne")
+        v_two = step_dict.get("targetValueTwo")
         if not isinstance(v_one, (int, float)) or not isinstance(v_two, (int, float)):
             return None
         if v_one <= 0 or v_two <= 0:
@@ -347,7 +354,11 @@ def garmin_to_canonical(payload: dict[str, Any]) -> Workout:
     External workouts that lack the ``[mcp]`` marker default to
     ``sport="road_run"`` and preserve the original description as-is.
     """
-    name = str(payload.get("workoutName") or "Untitled")
+    raw_name = str(payload.get("workoutName") or "Untitled")
+    # Strip the ``[mcp] `` source marker added by the forward translator so the
+    # canonical name round-trips cleanly. External workouts without the marker
+    # pass through unchanged.
+    name = raw_name[len(_NAME_MARKER) :] if raw_name.startswith(_NAME_MARKER) else raw_name
 
     description_raw = payload.get("description") or ""
     if not isinstance(description_raw, str):

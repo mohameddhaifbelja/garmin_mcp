@@ -96,9 +96,9 @@ def original_scheduled_payload() -> dict[str, Any]:
                         "targetType": {
                             "workoutTargetTypeId": 4,
                             "workoutTargetTypeKey": "heart.rate.zone",
-                            "targetValueOne": 141,
-                            "targetValueTwo": 155,
                         },
+                        "targetValueOne": 141,
+                        "targetValueTwo": 155,
                     },
                 ],
             }

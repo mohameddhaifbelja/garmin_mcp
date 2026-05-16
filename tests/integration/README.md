@@ -82,30 +82,24 @@ SIGKILLed or the process is otherwise hard-killed before the `finally` block:
 3. Delete any workout named `MCP integration smoke` or `MCP integration smoke (replaced)`.
 4. Under **Training → Workouts**, delete the same-named library templates.
 
-## Stretch: pace-target field-ordering verification on a real watch
+## What this test guards against
 
-T08's reviewer flagged that the forward translator's pace-target field
-ordering (DESIGN.md §7: `targetValueOne = sec_per_km_to_mps(max_sec_per_km)`
-i.e. slow end → smaller m/s; `targetValueTwo = sec_per_km_to_mps(min_sec_per_km)`
-i.e. fast end → larger m/s) cannot be verified without seeing the rendered
-range on a watch. The current smoke test uses HR targets, not pace, so it
-does **not** catch field-order inversion.
+`smoke_workout` deliberately exercises both an `HRRangeTarget` and a
+`PaceTarget` step so the test catches the two regression classes that
+lived undetected from T08 through the first live use (see STATUS.md
+"Post-build live-test fixes"):
 
-To cover this manually:
+1. **Target value placement.** Garmin reads `targetValueOne` and
+   `targetValueTwo` as siblings of `targetType` on the executable step,
+   not nested inside it. The test fetches the raw Garmin payload via
+   `client.get_scheduled_workout_by_id` and asserts the values are
+   present at the step top level.
+2. **Pace target type id.** Garmin renders `workoutTargetTypeId=5`
+   (`speed.zone`) as km/h and `id=6` (`pace.zone`) as min/km. The test
+   asserts the live payload comes back with `workoutTargetTypeKey ==
+   "pace.zone"` and `workoutTargetTypeId == 6`, so a silent regression
+   to the library's `TargetType.SPEED = 5` would fail loudly.
 
-1. Modify the `smoke_workout` fixture locally to use `PaceTarget` instead
-   of `HRRangeTarget` (e.g. `PaceTarget(min_sec_per_km=300, max_sec_per_km=360)`
-   = 5:00–6:00/km).
-2. Re-run the test, but **comment out the cleanup block** so the entry
-   survives.
-3. Open Garmin Connect → Calendar → the scheduled workout, or sync to the
-   watch and inspect the pace range.
-4. Confirm the displayed range reads "slow … fast" (or whichever order
-   Garmin renders) consistent with `300–360 s/km`. If the watch shows it
-   inverted, the fix is a 2-line swap inside `_pace_zone_target` in
-   `src/garmin/translate_forward.py` (see STATUS.md, T08 handoff to T15).
-5. **Delete the test workout manually afterward** (see "If the test crashes
-   mid-run" above).
-
-This stretch check is intentionally manual — automating it would require
-mocking the watch display, which defeats the purpose.
+The canonical round-trip also pins the bpm and sec/km values exactly,
+so a reverse-translator bug that fell back to `OpenTarget` (the
+original failure mode) can no longer pass with matching step count.

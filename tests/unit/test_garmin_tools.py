@@ -276,9 +276,8 @@ def test_list_scheduled_workouts_envelope_calendar_items(
                 "workoutScheduleId": 1,
                 "workoutId": 100,
                 "calendarDate": "2026-05-14",
-                "title": "Easy run",
+                "title": "[mcp] Easy run",
                 "estimatedDurationInSecs": 1800,
-                "description": "[mcp][road_run] Easy 30 min",
             },
         ],
     }
@@ -362,20 +361,25 @@ def test_list_scheduled_workouts_source_tagging_both_branches(
     stub_client: _StubClient,
     fixed_tz: None,
 ) -> None:
-    """One [mcp]-prefixed and one bare item — both source flags must be set."""
+    """One [mcp]-prefixed and one bare item — both source flags must be set.
+
+    Source classification reads the ``title`` field because Garmin's calendar
+    list payload does not echo the workout ``description`` (see
+    ``_project_summary`` for the rationale).
+    """
     stub_client.get_scheduled_responses[(2026, 5)] = {
         "calendarItems": [
             {
                 "workoutScheduleId": 10,
                 "workoutId": 1000,
                 "calendarDate": "2026-05-14",
-                "description": "[mcp][road_run] Easy run",
+                "title": "[mcp] Easy run",
             },
             {
                 "workoutScheduleId": 11,
                 "workoutId": 1100,
                 "calendarDate": "2026-05-15",
-                "description": "Race week tune-up — added on the phone",
+                "title": "Race week tune-up — added on the phone",
             },
         ],
     }
